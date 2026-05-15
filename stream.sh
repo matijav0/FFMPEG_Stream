@@ -7,12 +7,11 @@ PORT=8080
 
 mkdir -p "$OUTPUT_DIR"
 
-# Write a static HLS master playlist so Electra gets proper codec/type info
+# Master playlist — version 6 required for fMP4 segments
 cat > "$OUTPUT_DIR/stream.m3u8" << 'EOF'
 #EXTM3U
-#EXT-X-VERSION:3
-#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio",LANGUAGE="hr",NAME="Radio Rijeka",DEFAULT=YES,AUTOSELECT=YES,URI="media.m3u8"
-#EXT-X-STREAM-INF:BANDWIDTH=128000,CODECS="mp4a.40.2",AUDIO="audio"
+#EXT-X-VERSION:6
+#EXT-X-STREAM-INF:BANDWIDTH=128000,CODECS="mp4a.40.2"
 media.m3u8
 EOF
 
@@ -30,11 +29,11 @@ cleanup() {
     echo ""
     echo "Stopping..."
     kill "$HTTP_PID" 2>/dev/null || true
-    rm -f "$OUTPUT_DIR"/*.ts "$OUTPUT_DIR"/*.m3u8
+    rm -f "$OUTPUT_DIR"/*.ts "$OUTPUT_DIR"/*.m3u8 "$OUTPUT_DIR"/*.mp4 "$OUTPUT_DIR"/*.m4s
 }
 trap cleanup EXIT INT TERM
 
-# FFmpeg: pull AAC stream, segment into HLS media playlist (not master)
+# FFmpeg: fMP4 segments — better AVFoundation/Electra compatibility on macOS
 ffmpeg \
     -reconnect 1 \
     -reconnect_streamed 1 \
@@ -46,5 +45,7 @@ ffmpeg \
     -hls_time 2 \
     -hls_list_size 5 \
     -hls_flags delete_segments+append_list \
-    -hls_segment_filename "$OUTPUT_DIR/segment_%03d.ts" \
+    -hls_segment_type fmp4 \
+    -hls_fmp4_init_filename init.mp4 \
+    -hls_segment_filename "$OUTPUT_DIR/segment_%03d.m4s" \
     "$OUTPUT_DIR/media.m3u8"
